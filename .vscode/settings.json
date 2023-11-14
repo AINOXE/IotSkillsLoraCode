@@ -1,0 +1,13 @@
+{
+    "files.associations": {
+        "hal_oled.h": "c",
+        "stm32l1xx_hal.h": "c",
+        "board.h": "c",
+        "adc_reader.h": "c",
+        "usart1-board.h": "c",
+        "timer_handles.h": "c",
+        "led_light.h": "c",
+        "ns_radio.h": "c"
+    },
+    "files.encoding": "gb2312"
+}

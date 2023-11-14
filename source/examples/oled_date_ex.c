@@ -1,0 +1,221 @@
+#include <string.h>
+#include "board.h"
+#include "hal_key.h"
+#include "tim-board.h"
+#include "timer_handles.h"
+
+#include "hal_oled.h"
+#include "flash.h"
+#include "usart1-board.h"
+
+extern void handleCmd();
+extern void ShowMainPage();
+extern void ShowSettingPage();
+extern void ShowSel(int idx);
+extern const char f16[][32];
+
+uint32_t flData[32] = {0};
+int pageMode = 0;
+int selIdx = 2;
+int selEnter = 0;
+uint8_t errCmd[] = {0xFB, 0x01, 0xFE};
+uint8_t successCmd[] = {0xFB, 0x00, 0xFE};
+#define FLASH_SAVE() STMFLASH_Write(0x800E000, flData, 20)
+#define FLASH_READ() STMFLASH_Read(0x800E000, flData, 20)
+
+void OledDateExample()
+{
+    OLED_Init();
+    USART1_Init(115200);
+    FLASH_READ();
+    if (flData[0] != 213)
+    {
+        flData[0] = 213;
+        flData[1] = 2020;
+        flData[2] = 10;
+        flData[3] = 11;
+        FLASH_SAVE();
+    }
+    ShowMainPage();
+    // ShowSettingPage();
+    while (1)
+    {
+        DelayMs(10);
+        handleCmd();
+        if (pageMode == 0)
+        {
+            if (isKey4Pressed())
+            {
+                OLED_Clear();
+                ShowSettingPage();
+                ShowSel(1);
+                pageMode = 1;
+                resetKey4();
+            }
+            continue;
+        }
+        if (isKey4Pressed())
+        {
+
+            if (selEnter)
+            {
+                // Save
+                FLASH_SAVE();
+                ShowSettingPage();
+            }
+            ShowSel(selEnter ? -2 : -1);
+            resetKey4();
+        }
+
+        if (isKey3Pressed())
+        {
+            if (selEnter)
+            {
+                flData[selIdx + 1]--;
+                ShowSettingPage();
+            }
+            else
+            {
+                ShowSel(selIdx >= 2 ? 0 : selIdx + 1);
+            }
+            resetKey3();
+        }
+        if (isKey2Pressed())
+        {
+            if (selEnter)
+            {
+                flData[selIdx + 1]++;
+                ShowSettingPage();
+            }
+            else
+            {
+                ShowSel(selIdx <= 0 ? 2 : selIdx - 1);
+            }
+            resetKey2();
+        }
+    }
+}
+
+void ShowMainPage()
+{
+    uint8_t xp = 0;
+    OLED_ShowCHineseArray(xp, 0, (char *)f16[0]);
+    xp += 16;
+    OLED_ShowCHineseArray(xp, 0, (char *)f16[1]);
+    xp += 16;
+    OLED_ShowCHineseArray(xp, 0, (char *)f16[2]);
+    xp += 16;
+    OLED_ShowCHineseArray(xp, 0, (char *)f16[3]);
+    xp += 16;
+    OLED_ShowCHineseArray(xp, 0, (char *)f16[7]);
+    OLED_ShowCHineseArray(16 * 3, 2, (char *)f16[4]);
+
+    OLED_ShowCHineseArray(32, 4, (char *)f16[5]);
+    OLED_ShowCHineseArray(74, 4, (char *)f16[6]);
+
+    OLED_ShowNum(8, 2, flData[1], 4, 16);
+    OLED_ShowNum(8, 4, flData[2], 2, 16);
+    OLED_ShowNum(56, 4, flData[3], 2, 16);
+}
+
+void ShowSettingPage()
+{
+    OLED_ShowCHineseArray(0, 0, (char *)f16[4]);
+    OLED_ShowCHineseArray(16, 0, (char *)f16[7]);
+
+    OLED_ShowCHineseArray(0, 2, (char *)f16[5]);
+    OLED_ShowCHineseArray(16, 2, (char *)f16[7]);
+
+    OLED_ShowCHineseArray(0, 4, (char *)f16[6]);
+    OLED_ShowCHineseArray(16, 4, (char *)f16[7]);
+
+    OLED_ShowNum(40, 0, flData[1], 4, 16);
+    OLED_ShowNum(56, 2, flData[2], 2, 16);
+    OLED_ShowNum(56, 4, flData[3], 2, 16);
+}
+
+void ShowSel(int idx)
+{
+    if (idx == -1)
+    {
+        OLED_ShowChar(100, selIdx * 2, '*');
+        selEnter = 1;
+        GpioWrite(&Led2, 0);
+    }
+    else if (idx == -2)
+    {
+        OLED_ShowChar(100, selIdx * 2, ' ');
+        selEnter = 0;
+        GpioWrite(&Led2, 1);
+    }
+    else
+    {
+        OLED_ShowCHineseArray(80, selIdx * 2, (char *)f16[9]);
+        selIdx = idx;
+        OLED_ShowCHineseArray(80, selIdx * 2, (char *)f16[8]);
+    }
+}
+
+void handleCmd()
+{
+    if (USART1_RX_COUNT == 0)
+        return;
+    if (!(USART1_RX_BUF[0] == 0xFB && USART1_RX_BUF[USART1_RX_COUNT - 1] == 0xFE))
+    {
+        USART1_ReceiveClr();
+        USART1_SendStr(errCmd, 3);
+        return;
+    }
+
+    if (USART1_RX_BUF[1] == 1)
+    {
+        flData[1] = USART1_RX_BUF[2] * 100 + USART1_RX_BUF[3];
+    }
+    else
+    {
+        flData[USART1_RX_BUF[1]] = USART1_RX_BUF[2];
+    }
+    if (pageMode == 0)
+        ShowMainPage();
+    else
+        ShowSettingPage();
+
+    STMFLASH_Write(0x800E000, flData, 20);
+    USART1_ReceiveClr();
+    USART1_SendStr(successCmd, 3);
+    return;
+}
+
+/* 字库 */
+static const char f16[][32] = {
+    // 当
+    0x00, 0x40, 0x42, 0x44, 0x58, 0x40, 0x40, 0x7F, 0x40, 0x40, 0x50, 0x48, 0xC6, 0x00, 0x00, 0x00,
+    0x00, 0x40, 0x44, 0x44, 0x44, 0x44, 0x44, 0x44, 0x44, 0x44, 0x44, 0x44, 0xFF, 0x00, 0x00, 0x00,
+    // 前
+    0x08, 0x08, 0xE8, 0x29, 0x2E, 0x28, 0xE8, 0x08, 0x08, 0xC8, 0x0C, 0x0B, 0xE8, 0x08, 0x08, 0x00,
+    0x00, 0x00, 0xFF, 0x09, 0x49, 0x89, 0x7F, 0x00, 0x00, 0x0F, 0x40, 0x80, 0x7F, 0x00, 0x00, 0x00,
+    // 时
+    0x00, 0x00, 0x00, 0xFE, 0x82, 0x82, 0x82, 0x82, 0x82, 0x82, 0x82, 0xFE, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0xFF, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0xFF, 0x00, 0x00, 0x00, 0x00,
+    // 间
+    0x00, 0x04, 0xFF, 0x24, 0x24, 0x24, 0xFF, 0x04, 0x00, 0xFE, 0x22, 0x22, 0x22, 0xFE, 0x00, 0x00,
+    0x88, 0x48, 0x2F, 0x09, 0x09, 0x19, 0xAF, 0x48, 0x30, 0x0F, 0x02, 0x42, 0x82, 0x7F, 0x00, 0x00,
+    // 年
+    0x00, 0x20, 0x18, 0xC7, 0x44, 0x44, 0x44, 0x44, 0xFC, 0x44, 0x44, 0x44, 0x44, 0x04, 0x00, 0x00,
+    0x04, 0x04, 0x04, 0x07, 0x04, 0x04, 0x04, 0x04, 0xFF, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x00,
+    // 月
+    0x00, 0x00, 0x00, 0xFE, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0xFE, 0x00, 0x00, 0x00,
+    0x80, 0x40, 0x30, 0x0F, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x42, 0x82, 0x7F, 0x00, 0x00, 0x00,
+    // 日
+    0x00, 0x00, 0x00, 0xFE, 0x82, 0x82, 0x82, 0x82, 0x82, 0x82, 0x82, 0xFE, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0xFF, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0xFF, 0x00, 0x00, 0x00, 0x00,
+    // ：
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x36, 0x36, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+
+    0x00, 0x00, 0x00, 0x00, 0x80, 0x80, 0xC0, 0xC0, 0xE0, 0xE0, 0xF0, 0xF0, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x03, 0x03, 0x07, 0x07, 0x0F, 0x0F, 0x00, 0x00, 0x00, 0x00, /*"<-",8*/
+    // 空白
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /*"<-",9*/
+};
