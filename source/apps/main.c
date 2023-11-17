@@ -45,6 +45,7 @@ void Init()
 	OledDateExample();
 	// LoRaLedExample();
 	// LoRaP2PSerialPortTransparentTransmissionExample();
+	// LoRaSeneorDataExample();
 }
 
 /**********************************************************************************************

@@ -19,5 +19,5 @@ void OledFontLibExample(void);
 void OledDateExample(void);
 void LoRaLedExample(void);
 void LoRaP2PSerialPortTransparentTransmissionExample(void);
-
+void LoRaSeneorDataExample(void);
 #endif
