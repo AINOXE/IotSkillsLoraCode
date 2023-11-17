@@ -60,7 +60,6 @@ void ShowSelMenu()
 void app_main();
 void LoRaSeneorDataExample()
 {
-    Init();
     OLED_Init();
     NS_RadioInit(433001000, 20, 2000, 2000);
     app_main();
