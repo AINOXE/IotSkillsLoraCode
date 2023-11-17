@@ -11,13 +11,13 @@
 extern void handleCmd();
 extern void ShowMainPage();
 extern void ShowSettingPage();
-extern void ShowSel(int idx);
+extern void ShowSettingSel(int idx);
 extern const char f16[][32];
 
 uint32_t flData[32] = {0};
-int pageMode = 0;
+int pageId = 0;
 int selIdx = 2;
-int selEnter = 0;
+int isSettingItemEnter = 0;
 uint8_t errCmd[] = {0xFB, 0x01, 0xFE};
 uint8_t successCmd[] = {0xFB, 0x00, 0xFE};
 #define FLASH_SAVE() STMFLASH_Write(0x800E000, flData, 20)
@@ -42,54 +42,56 @@ void OledDateExample()
     {
         DelayMs(10);
         handleCmd();
-        if (pageMode == 0)
+        if (pageId == 0)
         {
             if (isKey4Pressed())
             {
                 OLED_Clear();
                 ShowSettingPage();
-                ShowSel(1);
-                pageMode = 1;
+                ShowSettingSel(1);
+                pageId = 1;
                 resetKey4();
             }
             continue;
         }
+        /* setting pgae */
         if (isKey4Pressed())
         {
 
-            if (selEnter)
+            if (isSettingItemEnter)
             {
                 // Save
                 FLASH_SAVE();
                 ShowSettingPage();
             }
-            ShowSel(selEnter ? -2 : -1);
+            ShowSettingSel(isSettingItemEnter ? -2 : -1);
             resetKey4();
         }
 
         if (isKey3Pressed())
         {
-            if (selEnter)
+            if (isSettingItemEnter)
             {
                 flData[selIdx + 1]--;
                 ShowSettingPage();
             }
             else
             {
-                ShowSel(selIdx >= 2 ? 0 : selIdx + 1);
+                ShowSettingSel(selIdx >= 2 ? 0 : selIdx + 1);
             }
             resetKey3();
         }
+
         if (isKey2Pressed())
         {
-            if (selEnter)
+            if (isSettingItemEnter)
             {
                 flData[selIdx + 1]++;
                 ShowSettingPage();
             }
             else
             {
-                ShowSel(selIdx <= 0 ? 2 : selIdx - 1);
+                ShowSettingSel(selIdx <= 0 ? 2 : selIdx - 1);
             }
             resetKey2();
         }
@@ -134,18 +136,18 @@ void ShowSettingPage()
     OLED_ShowNum(56, 4, flData[3], 2, 16);
 }
 
-void ShowSel(int idx)
+void ShowSettingSel(int idx)
 {
     if (idx == -1)
     {
         OLED_ShowChar(100, selIdx * 2, '*');
-        selEnter = 1;
+        isSettingItemEnter = 1;
         GpioWrite(&Led2, 0);
     }
     else if (idx == -2)
     {
         OLED_ShowChar(100, selIdx * 2, ' ');
-        selEnter = 0;
+        isSettingItemEnter = 0;
         GpioWrite(&Led2, 1);
     }
     else
@@ -175,7 +177,7 @@ void handleCmd()
     {
         flData[USART1_RX_BUF[1]] = USART1_RX_BUF[2];
     }
-    if (pageMode == 0)
+    if (pageId == 0)
         ShowMainPage();
     else
         ShowSettingPage();
